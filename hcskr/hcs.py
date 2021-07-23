@@ -61,6 +61,7 @@ async def asyncSelfCheck(
         res = await send_hcsreq(
             headers={
                 "Content-Type": "application/json",
+                'X-Requested-With': 'XMLHttpRequest',
                 "Authorization": login_result["token"],
             },
             endpoint="/v2/selectUserGroup",

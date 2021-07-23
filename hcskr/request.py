@@ -9,7 +9,6 @@ async def send_hcsreq(headers: Dict, endpoint: str, school: str, json: Dict):
                 async with session.post(
                     headers=headers, url=f"https://{school}hcs.eduro.go.kr{endpoint}", json=json
                 ) as resp:
-
                     return await resp.json()
         except ServerDisconnectedError as e:
             if attempt >= 4:
