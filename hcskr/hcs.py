@@ -2,36 +2,38 @@ import asyncio
 import sys
 
 import jwt
+import json
 
 from base64 import b64decode, b64encode
 
 from .mapping import schoolinfo, encrypt, pubkey
 from .request import send_hcsreq, search_school
+from .transkey import mTransKey
 
 
 def selfcheck(
-    name: str,
-    birth: str,
-    area: str,
-    schoolname: str,
-    level: str,
-    password: str,
-    customloginname: str = None,
-    loop=asyncio.get_event_loop()
+        name: str,
+        birth: str,
+        area: str,
+        schoolname: str,
+        level: str,
+        password: str,
+        customloginname: str = None,
+        loop=asyncio.get_event_loop()
 ):
-    return loop.run_until_complete(asyncSelfCheck(name,birth,area,schoolname,level,password,customloginname))
+    return loop.run_until_complete(asyncSelfCheck(name, birth, area, schoolname, level, password, customloginname))
 
 
 def userlogin(
-    name: str, birth: str, area: str, schoolname: str, level: str, password: str, loop=asyncio.get_event_loop()
+        name: str, birth: str, area: str, schoolname: str, level: str, password: str, loop=asyncio.get_event_loop()
 ):
-    return loop.run_until_complete(asyncUserLogin(name,birth,area,schoolname,level,password))
+    return loop.run_until_complete(asyncUserLogin(name, birth, area, schoolname, level, password))
 
 
 def generatetoken(
-    name: str, birth: str, area: str, schoolname: str, level: str, password: str, loop=asyncio.get_event_loop()
+        name: str, birth: str, area: str, schoolname: str, level: str, password: str, loop=asyncio.get_event_loop()
 ):
-    return loop.run_until_complete(asyncGenerateToken(name,birth,area,schoolname,level,password))
+    return loop.run_until_complete(asyncGenerateToken(name, birth, area, schoolname, level, password))
 
 
 def tokenselfcheck(token: str, loop=asyncio.get_event_loop()):
@@ -39,13 +41,13 @@ def tokenselfcheck(token: str, loop=asyncio.get_event_loop()):
 
 
 async def asyncSelfCheck(
-    name: str,
-    birth: str,
-    area: str,
-    schoolname: str,
-    level: str,
-    password: str,
-    customloginname: str = None,
+        name: str,
+        birth: str,
+        area: str,
+        schoolname: str,
+        level: str,
+        password: str,
+        customloginname: str = None,
 ):
     if customloginname is None:
         customloginname = name
@@ -61,9 +63,29 @@ async def asyncSelfCheck(
                 "Content-Type": "application/json",
                 "Authorization": login_result["token"],
             },
+            endpoint="/v2/selectUserGroup",
+            school=login_result["info"]["schoolurl"],
+            json={},
+        )
+        userdataobject = {}
+        for user in res:
+            try:
+                if user['otherYn'] == "N":
+                    userdataobject = user
+            except:
+                pass
+
+        userPNo = userdataobject["userPNo"]
+        token = userdataobject["token"]
+
+        res = await send_hcsreq(
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": token,
+            },
             endpoint="/v2/getUserInfo",
             school=login_result["info"]["schoolurl"],
-            json={"orgCode": login_result["schoolcode"]},
+            json={"orgCode": login_result["schoolcode"], userPNo: userPNo},
         )
 
         token = res["token"]
@@ -104,11 +126,10 @@ async def asyncSelfCheck(
 
 
 async def asyncUserLogin(
-    name: str, birth: str, area: str, schoolname: str, level: str, password: str
+        name: str, birth: str, area: str, schoolname: str, level: str, password: str
 ):
     name = encrypt(name)  # Encrypt Name
     birth = encrypt(birth)  # Encrypt Birth
-    password = encrypt(password)  # Encrypt Password
 
     try:
         info = schoolinfo(area, level)  # Get schoolInfo from Hcs API
@@ -161,12 +182,39 @@ async def asyncUserLogin(
         }
 
     try:
+        mtk = mTransKey("https://hcs.eduro.go.kr/transkeyServlet")
+        pw_pad = mtk.new_keypad("number", "password", "password", "password")
+        encrypted = pw_pad.encrypt_password(password)
+        hm = mtk.hmac_digest(encrypted.encode())
+
         res = await send_hcsreq(
-            headers={"Content-Type": "application/json", "Authorization": token},
+            headers={
+                "Referer": "https://hcs.eduro.go.kr/",
+                "Authorization": token,
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/json;charset=utf-8"
+            },
             endpoint="/v2/validatePassword",
             school=info["schoolurl"],
-            json={"password": password, "deviceUuid": ""},
+            json={
+                "password": json.dumps({"raon": [
+                    {
+                        "id": "password",
+                        "enc": encrypted,
+                        "hmac": hm,
+                        "keyboardType": "number",
+                        "keyIndex": mtk.crypto.rsa_encrypt(b"32"),
+                        "fieldType": "password",
+                        "seedKey": mtk.crypto.get_encrypted_key(),
+                        "initTime": mtk.initTime,
+                        "ExE2E": "false"
+                    }
+                ]}),
+                "deviceUuid": "",
+                "makeSession": True
+            },
         )
+
         if isinstance(res, dict):
             if res["isError"]:
                 return {
@@ -174,7 +222,7 @@ async def asyncUserLogin(
                     "code": "PASSWORD",
                     "message": "학생정보는 검색하였으나, 비밀번호가 틀립니다.",
                 }
-        
+
         token = res
 
     except Exception:
@@ -204,7 +252,7 @@ async def asyncUserLogin(
 
 
 async def asyncGenerateToken(
-    name: str, birth: str, area: str, schoolname: str, level: str, password: str
+        name: str, birth: str, area: str, schoolname: str, level: str, password: str
 ):
     login_result = await asyncUserLogin(**locals())
 
