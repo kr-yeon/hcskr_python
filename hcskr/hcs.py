@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import sys
 
 import jwt
@@ -27,7 +28,9 @@ def selfcheck(
 def userlogin(
         name: str, birth: str, area: str, schoolname: str, level: str, password: str, loop=asyncio.get_event_loop()
 ):
-    return loop.run_until_complete(asyncUserLogin(name, birth, area, schoolname, level, password))
+    return loop.run_until_complete(asyncUserLogin(
+        name, birth, area, schoolname, level, password, aiohttp.ClientSession())
+    )
 
 
 def generatetoken(
@@ -49,85 +52,89 @@ async def asyncSelfCheck(
         password: str,
         customloginname: str = None,
 ):
-    if customloginname is None:
-        customloginname = name
+    async with aiohttp.ClientSession() as session:
+        if customloginname is None:
+            customloginname = name
 
-    login_result = await asyncUserLogin(name, birth, area, schoolname, level, password)
+        login_result = await asyncUserLogin(name, birth, area, schoolname, level, password, session)
 
-    if login_result["error"]:
-        return login_result
+        if login_result["error"]:
+            return login_result
 
-    try:
-        res = await send_hcsreq(
-            headers={
-                "Content-Type": "application/json",
-                'X-Requested-With': 'XMLHttpRequest',
-                "Authorization": login_result["token"],
-            },
-            endpoint="/v2/selectUserGroup",
-            school=login_result["info"]["schoolurl"],
-            json={},
-        )
-        userdataobject = {}
-        for user in res:
-            try:
-                if user['otherYn'] == "N":
-                    userdataobject = user
-            except:
-                pass
+        try:
+            res = await send_hcsreq(
+                headers={
+                    "Content-Type": "application/json",
+                    'X-Requested-With': 'XMLHttpRequest',
+                    "Authorization": login_result["token"],
+                },
+                endpoint="/v2/selectUserGroup",
+                school=login_result["info"]["schoolurl"],
+                json={},
+                session=session
+            )
+            userdataobject = {}
+            for user in res:
+                try:
+                    if user['otherYn'] == "N":
+                        userdataobject = user
+                except:
+                    pass
 
-        userPNo = userdataobject["userPNo"]
-        token = userdataobject["token"]
+            userPNo = userdataobject["userPNo"]
+            token = userdataobject["token"]
 
-        res = await send_hcsreq(
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": token,
-            },
-            endpoint="/v2/getUserInfo",
-            school=login_result["info"]["schoolurl"],
-            json={"orgCode": login_result["schoolcode"], userPNo: userPNo},
-        )
+            res = await send_hcsreq(
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": token,
+                },
+                endpoint="/v2/getUserInfo",
+                school=login_result["info"]["schoolurl"],
+                json={"orgCode": login_result["schoolcode"], userPNo: userPNo},
+                session=session,
+            )
 
-        token = res["token"]
+            token = res["token"]
 
-    except Exception:
-        return {
-            "error": True,
-            "code": "UNKNOWN",
-            "message": "getUserInfo: 알 수 없는 에러 발생.",
-        }
+        except Exception:
+            return {
+                "error": True,
+                "code": "UNKNOWN",
+                "message": "getUserInfo: 알 수 없는 에러 발생.",
+            }
 
-    try:
-        res = await send_hcsreq(
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": token,
-            },
-            endpoint="/registerServey",
-            school=login_result["info"]["schoolurl"],
-            json={
-                "rspns01": "1",
-                "rspns02": "1",
-                "rspns00": "Y",
-                "upperToken": token,
-                "upperUserNameEncpt": customloginname,
-            },
-        )
+        try:
+            res = await send_hcsreq(
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": token,
+                },
+                endpoint="/registerServey",
+                school=login_result["info"]["schoolurl"],
+                json={
+                    "rspns01": "1",
+                    "rspns02": "1",
+                    "rspns00": "Y",
+                    "upperToken": token,
+                    "upperUserNameEncpt": customloginname,
+                },
+                session=session
+            )
 
-        return {
-            "error": False,
-            "code": "SUCCESS",
-            "message": "성공적으로 자가진단을 수행하였습니다.",
-            "regtime": res["registerDtm"],
-        }
+            return {
+                "error": False,
+                "code": "SUCCESS",
+                "message": "성공적으로 자가진단을 수행하였습니다.",
+                "regtime": res["registerDtm"],
+            }
 
-    except Exception:
-        return {"error": True, "code": "UNKNOWN", "message": "알 수 없는 에러 발생."}
+        except Exception:
+            return {"error": True, "code": "UNKNOWN", "message": "알 수 없는 에러 발생."}
 
 
 async def asyncUserLogin(
-        name: str, birth: str, area: str, schoolname: str, level: str, password: str
+        name: str, birth: str, area: str, schoolname: str, level: str, password: str, session: aiohttp.ClientSession
 ):
     name = encrypt(name)  # Encrypt Name
     birth = encrypt(birth)  # Encrypt Birth
@@ -171,6 +178,7 @@ async def asyncUserLogin(
                 "loginType": "school",
                 "stdntPNo": None,
             },
+            session=session
         )
 
         token = res["token"]
@@ -214,6 +222,7 @@ async def asyncUserLogin(
                 "deviceUuid": "",
                 "makeSession": True
             },
+            session=session
         )
 
         if isinstance(res, dict):
