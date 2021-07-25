@@ -1237,27 +1237,6 @@ class SEED:
         C[0] = (C[0] << 8 ^ D[0] >> 24) & 4294967295
         D[0] = (D[0] << 8 ^ T0 >> 24) & 4294967295
 
-    def cbc_encrypt(self, plain, k, iv):
-        encData = ''
-        inData = []
-        pp = addpadding(plain, 16)
-        for i in range(len(pp)):
-            inData.append(ord(pp[i]))
-
-        xOutput = ''
-        for j in range(0, len(pp), 16):
-            for i in range(0, 16):
-                xOutput += chr(iv[i] ^ inData[i + j])
-
-            enc = self.SeedEncrypt(xOutput, k)
-            xInput = []
-            xOutput = ''
-            for m in range(0, 16):
-                xInput.append(ord(enc[m]))
-
-            encData += enc
-
-        return encData
 
     def my_cbc_encrypt(self, inData, k, iv):
         xored = []
