@@ -5,12 +5,6 @@ from . import crypto
 from .keypad import KeyPad
 
 
-keyboardTypes = {
-    "qwerty": "qwerty",
-    "number": "number"
-}
-
-
 class mTransKey:
     def __init__(self, servlet_url):
         self.sess = requests.Session()
@@ -73,7 +67,7 @@ class mTransKey:
             "op": "getDummy",
             "name": name,
             "keyType": "single",
-            "keyboardType": keyboardTypes[key_type],
+            "keyboardType": "number",
             "fieldType": fieldType,
             "inputName": inputName,
             "transkeyUuid": self.crypto.uuid,
@@ -89,10 +83,7 @@ class mTransKey:
 
         skip = skip_data.split(",")
 
-        if key_type == "qwerty":
-            return KeyPad(self.crypto, key_type, skip, self.qwerty)
-        else:
-            return KeyPad(self.crypto, key_type, skip, self.number)
+        return KeyPad(self.crypto, key_type, skip, self.number)
 
     def hmac_digest(self, message):
         return self.crypto.hmac_digest(message)
