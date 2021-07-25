@@ -1238,7 +1238,6 @@ class SEED:
         D[0] = (D[0] << 8 ^ T0 >> 24) & 4294967295
 
     def cbc_encrypt(self, plain, k, iv):
-        enc = ''
         encData = ''
         inData = []
         pp = addpadding(plain, 16)

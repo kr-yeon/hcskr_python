@@ -75,11 +75,9 @@ async def asyncSelfCheck(
             )
             userdataobject = {}
             for user in res:
-                try:
-                    if user['otherYn'] == "N":
-                        userdataobject = user
-                except:
-                    pass
+                if user['otherYn'] == "N":
+                    userdataobject = user
+                    break
 
             userPNo = userdataobject["userPNo"]
             token = userdataobject["token"]
