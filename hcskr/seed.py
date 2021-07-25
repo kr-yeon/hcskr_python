@@ -1048,13 +1048,6 @@ def endianchange(data):
     return ROL(data, 8, 32) & 16711935 | ROL(data, 24, 32) & 4278255360
 
 
-def addpadding(sbuf, pad):
-    if len(sbuf) == pad:
-        return sbuf
-    pchar = chr(pad - len(sbuf) % pad)
-    return sbuf.ljust(len(sbuf) + (pad - len(sbuf) % 16), pchar)
-
-
 class SEED:
 
     def __init__(self):
@@ -1107,44 +1100,6 @@ class SEED:
         self.__SeedRound__(R0, R1, L0, L1, K, 26)
         self.__SeedRound__(L0, L1, R0, R1, K, 28)
         self.__SeedRound__(R0, R1, L0, L1, K, 30)
-        if L_ENDIAN == 1:
-            return struct.pack('>LLLL', endianchange(R0[0]), endianchange(R1[0]), endianchange(L0[0]),
-                               endianchange(L1[0]))
-        else:
-            return struct.pack('>LLLL', R0[0], R1[0], L0[0], L1[0])
-
-    def SeedDecrypt(self, Src, RoundKey):
-        L0 = []
-        L1 = []
-        R0 = []
-        R1 = []
-        if L_ENDIAN == 1:
-            L0.append(endianchange(GetDword(Src, 0)))
-            L1.append(endianchange(GetDword(Src, 4)))
-            R0.append(endianchange(GetDword(Src, 8)))
-            R1.append(endianchange(GetDword(Src, 12)))
-        else:
-            L0.append(GetDword(Src, 0))
-            L1.append(GetDword(Src, 4))
-            R0.append(GetDword(Src, 8))
-            R1.append(GetDword(Src, 12))
-        K = RoundKey
-        self.__SeedRound__(L0, L1, R0, R1, K, 30)
-        self.__SeedRound__(R0, R1, L0, L1, K, 28)
-        self.__SeedRound__(L0, L1, R0, R1, K, 26)
-        self.__SeedRound__(R0, R1, L0, L1, K, 24)
-        self.__SeedRound__(L0, L1, R0, R1, K, 22)
-        self.__SeedRound__(R0, R1, L0, L1, K, 20)
-        self.__SeedRound__(L0, L1, R0, R1, K, 18)
-        self.__SeedRound__(R0, R1, L0, L1, K, 16)
-        self.__SeedRound__(L0, L1, R0, R1, K, 14)
-        self.__SeedRound__(R0, R1, L0, L1, K, 12)
-        self.__SeedRound__(L0, L1, R0, R1, K, 10)
-        self.__SeedRound__(R0, R1, L0, L1, K, 8)
-        self.__SeedRound__(L0, L1, R0, R1, K, 6)
-        self.__SeedRound__(R0, R1, L0, L1, K, 4)
-        self.__SeedRound__(L0, L1, R0, R1, K, 2)
-        self.__SeedRound__(R0, R1, L0, L1, K, 0)
         if L_ENDIAN == 1:
             return struct.pack('>LLLL', endianchange(R0[0]), endianchange(R1[0]), endianchange(L0[0]),
                                endianchange(L1[0]))
@@ -1236,28 +1191,6 @@ class SEED:
         T0 = C[0]
         C[0] = (C[0] << 8 ^ D[0] >> 24) & 4294967295
         D[0] = (D[0] << 8 ^ T0 >> 24) & 4294967295
-
-    def cbc_encrypt(self, plain, k, iv):
-        encData = ''
-        inData = []
-        pp = addpadding(plain, 16)
-        for i in range(len(pp)):
-            inData.append(ord(pp[i]))
-
-        xOutput = ''
-        for j in range(0, len(pp), 16):
-            for i in range(0, 16):
-                xOutput += chr(iv[i] ^ inData[i + j])
-
-            enc = self.SeedEncrypt(xOutput, k)
-            xInput = []
-            xOutput = ''
-            for m in range(0, 16):
-                xInput.append(ord(enc[m]))
-
-            encData += enc
-
-        return encData
 
     def my_cbc_encrypt(self, inData, k, iv):
         xored = []
